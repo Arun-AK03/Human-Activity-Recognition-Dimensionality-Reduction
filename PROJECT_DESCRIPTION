@@ -1,0 +1,67 @@
+# Project Description — Human Activity Recognition with Dimensionality Reduction
+
+*UNSW · MATH5836 Data and Machine Learning · 2025 T2 · Individual project by Arun Kumar Selvaraj *
+
+## 1. Overview
+Human Activity Recognition (HAR) is the task of identifying what physical activity a person is performing from sensor signals. This project trains machine-learning models on the HAR dataset to classify six activities, then investigates a central practical question: **how much can we reduce the 561-dimensional feature space while preserving classification performance?**
+
+Two dimensionality-reduction strategies are compared — supervised correlation-based feature selection and unsupervised SVD-based projection — each evaluated on two model families across a range of target dimensions.
+
+## 2. The dataset
+The HAR dataset was built from 30 volunteers (aged 19–48) who performed six activities — **walking, walking upstairs, walking downstairs, sitting, standing, and laying** — while wearing a waist-mounted Samsung Galaxy S II. Its accelerometer and gyroscope captured 3-axial linear acceleration and angular velocity at 50 Hz. The raw signals were noise-filtered, windowed (2.56 s, 50% overlap), and transformed into **561 engineered features** spanning time- and frequency-domain statistics.
+
+- **Samples:** 10,299
+- **Features:** 561 (all numeric, pre-engineered)
+- **Classes:** 6 (roughly balanced)
+- **Access:** loads from OpenML via `fetch_openml(name="har", version=1)`; released to the public domain.
+
+## 3. Background & theory
+Two short theoretical results underpin the SVD method used later:
+
+1. For standardised data matrix `X ∈ R^(n×d)`, the matrix `Σ = (1/(n−1)) XᵀX` is the sample correlation matrix (or, for centred `X`, the covariance matrix).
+2. `Σ` is positive semi-definite, so its singular value decomposition takes the form `Σ = Σ_j λ_j u_j u_jᵀ`, with non-negative eigenvalues `λ₁ ≥ λ₂ ≥ … ≥ 0` and orthonormal eigenvectors `u_j`.
+
+Projecting the data onto the top-k eigenvectors (`X̃_k = X U_k`) therefore retains the directions of greatest variance — the basis of the SVD reduction below.
+
+## 4. Preprocessing & exploratory analysis
+- **Data quality:** inspected for missing values and outliers; the dataset is clean with no nulls.
+- **Class balance:** examined the class-wise distribution to confirm no single activity dominates, reducing the risk of a model overfitting to one class.
+- **Feature relevance:** computed correlation between each feature and the target using P-test/F-test statistics, and additionally used **XGBoost permutation importance** to rank features. The top 10 most important features were identified (the strongest carrying an importance of roughly 0.0087).
+- **Standardisation:** features were standardised, and crucially this was done **separately within each experiment** (fit on train, applied to test) to prevent information leakage.
+
+## 5. Models
+Two classifiers were trained:
+
+- **Multilayer Perceptron (MLP)** — a dense neural network with three hidden layers, each with more than 10 neurons.
+- **Random Forest** — an ensemble of decision trees, tuned on tree depth.
+
+## 6. Evaluation protocol
+To produce reliable, non-cherry-picked estimates:
+
+- Each configuration was run **5 times with different random seeds**.
+- Each run used a fresh **80/20 train/test split** with standardisation fit only on the training portion.
+- Reported metrics are **mean ± standard deviation** of **Accuracy, F1-score, and ROC-AUC**.
+
+## 7. Dimensionality reduction experiments
+Both strategies were swept over **k = [100, 200, 300, 400, 500]**:
+
+**Correlation-based selection.** For each k, keep the k features with the highest absolute Pearson correlation to the target, retrain, and record performance.
+
+**SVD-based projection.** For each k, standardise/centre `X`, compute the SVD of `Σ`, take the top k eigenvectors `U_k`, project `X̃_k = X U_k`, retrain, and record performance.
+
+Performance (Accuracy, F1, ROC-AUC) was plotted against k for each method and model.
+
+## 8. Results
+- On the **full 561 features**, both the MLP and the Random Forest achieved approximately **98% accuracy**, with correspondingly strong F1 and ROC-AUC.
+- After reduction, **both methods kept accuracy above ~93.6%** across the entire k range — meaning the feature space can be cut dramatically with only a modest performance cost.
+- Performance was stable across the five seeds (small standard deviations), indicating the results are robust rather than the product of a lucky split.
+
+## 9. Conclusion & discussion
+The experiments show that the HAR signal is concentrated in a relatively compact subspace: a large fraction of the 561 features can be discarded — whether by selecting the most target-correlated features or by projecting onto the leading SVD components — while retaining high classification quality. This has a practical payoff for **on-device, energy-efficient activity recognition**, where fewer features mean less computation and memory.
+
+Possible extensions: pushing k lower to find the true accuracy/efficiency knee point, comparing against other reducers (e.g. PCA variants, mutual-information selection), and examining which specific activities (e.g. sitting vs. standing, a known overlap in the literature) drive the residual error.
+
+## 10. Dataset credit
+> Anguita, D., Ghio, A., Oneto, L., Parra, X., & Reyes-Ortiz, J. L. (2013). *A Public Domain Dataset for Human Activity Recognition Using Smartphones.* 21st European Symposium on Artificial Neural Networks (ESANN 2013), Bruges, Belgium.
+
+Source: UCI Machine Learning Repository / OpenML (id 1478). The dataset is released to the public domain.
